@@ -27,10 +27,11 @@ func init() {
 		Default(defaultInterval).DurationVar(&config.Interval)
 	kingpin.Flag("pod-identifier", "Pod identifier specified by <namespace>:<key>=<value>,+.").
 		SetValue(&config.PodIdentifiers)
-	kingpin.Parse()
 }
 
 func main() {
+	kingpin.Parse()
+
 	controller, err := NewNodeController(config.PodIdentifiers, config.Interval)
 	if err != nil {
 		log.Fatal(err)
