@@ -1,0 +1,15 @@
+language: go
+
+go:
+  - 1.8
+
+before_install:
+  - go get github.com/mattn/goveralls
+  - go get github.com/Masterminds/glide
+
+install:
+  - glide install --strip-vendor
+
+script:
+  - goveralls -service=travis-ci
+  - make
