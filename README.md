@@ -20,11 +20,12 @@ running on the node before it is considered ready.
 
 ## How it works
 
-The controller is configured with a list of pod selectors (namespace + labels) and
-for each node it will check if the pods are scheduled and has status ready. If
-all expected pods are ready it will make sure the node doesn't have the taint
-`node.alpha.kubernetes.io/notReady-workload`. If some expected pods aren't
-ready, it will make sure to set the taint on the node.
+The controller is configured with a list of pod selectors (namespace + labels)
+and for each node it will check if the pods are scheduled and has status ready.
+If all expected pods are ready it will make sure the node doesn't have the
+[taint][taints-tolerations] `node.alpha.kubernetes.io/notReady-workload`. If
+some expected pods aren't ready, it will make sure to set the taint on the
+node.
 
 ## Setup
 
@@ -76,3 +77,4 @@ $ kubectl taint nodes <nodename> "node.alpha.kubernetes.io/notReady-workload=:No
 
 [kube2iam]: https://github.com/jtblin/kube2iam
 [logging-agent]: https://github.com/zalando-incubator/kubernetes-log-watcher
+[taints-tolerations]: https://kubernetes.io/docs/concepts/configuration/assign-pod-node/#taints-and-tolerations-beta-feature
