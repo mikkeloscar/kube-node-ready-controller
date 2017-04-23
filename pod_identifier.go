@@ -39,7 +39,7 @@ func (p *PodIdentifiers) Set(value string) error {
 	labelsStrs := strings.Split(divide[1], ",")
 	labels := make(map[string]string, len(labelsStrs))
 	for _, labelStr := range labelsStrs {
-		kv := strings.Split(labelStr, ",")
+		kv := strings.Split(labelStr, "=")
 		if len(kv) != 2 {
 			return fmt.Errorf("invalid pod identifier format")
 		}
