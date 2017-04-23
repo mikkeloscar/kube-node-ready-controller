@@ -13,7 +13,7 @@ import (
 )
 
 const (
-	CustomTaintNodeNotReady = "node.alpha.kubernetes.io.custom/notReady"
+	TaintNodeNotReadyWorkload = "node.alpha.kubernetes.io/notReady-workload"
 )
 
 // NodeController updates the readiness taint of nodes based on expected
@@ -124,7 +124,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 	if ready {
 		var newTaints []v1.Taint
 		for _, taint := range node.Spec.Taints {
-			if taint.Key != CustomTaintNodeNotReady {
+			if taint.Key != TaintNodeNotReadyWorkload {
 				newTaints = append(newTaints, taint)
 			}
 		}
@@ -140,7 +140,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 	} else { // else add the taint if the node is not ready
 		hasTaint := func(node *v1.Node) bool {
 			for _, taint := range node.Spec.Taints {
-				if taint.Key == CustomTaintNodeNotReady {
+				if taint.Key == TaintNodeNotReadyWorkload {
 					return true
 				}
 			}
@@ -149,7 +149,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 
 		if !hasTaint(node) {
 			taint := v1.Taint{
-				Key:    CustomTaintNodeNotReady,
+				Key:    TaintNodeNotReadyWorkload,
 				Effect: v1.TaintEffectNoSchedule,
 			}
 			node.Spec.Taints = append(node.Spec.Taints, taint)
