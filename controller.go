@@ -181,7 +181,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 // containLabels reports whether expectedLabels are in labels.
 func containLabels(labels, expectedLabels map[string]string) bool {
 	for key, val := range expectedLabels {
-		if v, ok := labels[key]; !ok || v == val {
+		if v, ok := labels[key]; !ok || v != val {
 			return false
 		}
 	}
