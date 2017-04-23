@@ -135,7 +135,11 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 			if err != nil {
 				return err
 			}
-			log.Infof("Removed notReady taint from node: %s", node.ObjectMeta.Name)
+			log.WithFields(log.Fields{
+				"action": "removed",
+				"taint":  TaintNodeNotReadyWorkload,
+				"node":   node.ObjectMeta.Name,
+			}).Info("")
 		}
 	} else { // else add the taint if the node is not ready
 		hasTaint := func(node *v1.Node) bool {
@@ -157,7 +161,11 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 			if err != nil {
 				return err
 			}
-			log.Infof("Added notReady taint to node: %s", node.ObjectMeta.Name)
+			log.WithFields(log.Fields{
+				"action": "added",
+				"taint":  TaintNodeNotReadyWorkload,
+				"node":   node.ObjectMeta.Name,
+			}).Info("")
 		}
 	}
 
