@@ -17,22 +17,22 @@ const (
 
 var (
 	config struct {
-		Interval       time.Duration
-		PodIdentifiers PodIdentifiers
+		Interval     time.Duration
+		PodSelectors PodSelectors
 	}
 )
 
 func init() {
 	kingpin.Flag("interval", "Interval between checks.").
 		Default(defaultInterval).DurationVar(&config.Interval)
-	kingpin.Flag("pod-identifier", "Pod identifier specified by <namespace>:<key>=<value>,+.").
-		SetValue(&config.PodIdentifiers)
+	kingpin.Flag("pod-selector", "Pod selector specified by <namespace>:<key>=<value>,+.").
+		SetValue(&config.PodSelectors)
 }
 
 func main() {
 	kingpin.Parse()
 
-	controller, err := NewNodeController(config.PodIdentifiers, config.Interval)
+	controller, err := NewNodeController(config.PodSelectors, config.Interval)
 	if err != nil {
 		log.Fatal(err)
 	}

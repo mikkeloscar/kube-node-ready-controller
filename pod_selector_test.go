@@ -2,8 +2,8 @@ package main
 
 import "testing"
 
-func TestPodIdentifierString(t *testing.T) {
-	podIdentifiers := PodIdentifiers([]*PodIdentifier{
+func TestPodSelectorString(t *testing.T) {
+	PodSelectors := PodSelectors([]*PodSelector{
 		{
 			Namespace: "kube-system",
 			Labels:    map[string]string{"key": "value"},
@@ -11,37 +11,37 @@ func TestPodIdentifierString(t *testing.T) {
 	})
 	expected := "kube-system:key=value"
 
-	if podIdentifiers.String() != expected {
-		t.Errorf("expected %s, got %s", expected, podIdentifiers.String())
+	if PodSelectors.String() != expected {
+		t.Errorf("expected %s, got %s", expected, PodSelectors.String())
 	}
 
 }
 
-func TestSetPodIdentifierValue(t *testing.T) {
+func TestSetPodSelectorValue(t *testing.T) {
 	for _, tc := range []struct {
 		msg   string
 		value string
 		valid bool
 	}{
 		{
-			msg:   "test valid identifier",
+			msg:   "test valid selector",
 			value: "kube-system:application=skipper-ingress",
 			valid: true,
 		},
 		{
-			msg:   "test invalid identifier with missing labels",
+			msg:   "test invalid selector with missing labels",
 			value: "kube-system",
 			valid: false,
 		},
 		{
-			msg:   "test invalid identifier with invalid label definition",
+			msg:   "test invalid selector with invalid label definition",
 			value: "kube-system:key-value",
 			valid: false,
 		},
 	} {
 		t.Run(tc.msg, func(t *testing.T) {
-			podIdentifiers := PodIdentifiers([]*PodIdentifier{})
-			err := podIdentifiers.Set(tc.value)
+			podSelectors := PodSelectors([]*PodSelector{})
+			err := podSelectors.Set(tc.value)
 			if err != nil && tc.valid {
 				t.Errorf("should not fail: %s", err)
 			}
@@ -53,9 +53,9 @@ func TestSetPodIdentifierValue(t *testing.T) {
 	}
 }
 
-func TestPodIdentifierIsCumulative(t *testing.T) {
-	podIdentifiers := PodIdentifiers([]*PodIdentifier{})
-	if !podIdentifiers.IsCumulative() {
+func TestPodSelectorIsCumulative(t *testing.T) {
+	podSelectors := PodSelectors([]*PodSelector{})
+	if !podSelectors.IsCumulative() {
 		t.Error("expected IsCumulative = true")
 	}
 }

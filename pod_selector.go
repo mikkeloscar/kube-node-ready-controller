@@ -5,16 +5,16 @@ import (
 	"strings"
 )
 
-// PodIdentifier consist of namespace and labels that can identify a Pod.
-type PodIdentifier struct {
+// PodSelector consist of namespace and labels that can identify a Pod.
+type PodSelector struct {
 	Namespace string
 	Labels    map[string]string
 }
 
-// PodIdentifiers is a list of PodIdentifier definitions.
-type PodIdentifiers []*PodIdentifier
+// PodSelectors is a list of PodSelector definitions.
+type PodSelectors []*PodSelector
 
-func (p PodIdentifiers) String() string {
+func (p PodSelectors) String() string {
 	strs := make([]string, len(p))
 	for i, t := range p {
 		labels := make([]string, 0, len(t.Labels))
@@ -27,11 +27,11 @@ func (p PodIdentifiers) String() string {
 	return strings.Join(strs, " - ")
 }
 
-// Set parses a pod identifier string and adds it to the list.
-func (p *PodIdentifiers) Set(value string) error {
+// Set parses a pod selector string and adds it to the list.
+func (p *PodSelectors) Set(value string) error {
 	divide := strings.Split(value, ":")
 	if len(divide) != 2 {
-		return fmt.Errorf("invalid pod identifier format")
+		return fmt.Errorf("invalid pod selector format")
 	}
 
 	namespace := divide[0]
@@ -41,18 +41,18 @@ func (p *PodIdentifiers) Set(value string) error {
 	for _, labelStr := range labelsStrs {
 		kv := strings.Split(labelStr, "=")
 		if len(kv) != 2 {
-			return fmt.Errorf("invalid pod identifier format")
+			return fmt.Errorf("invalid pod selector format")
 		}
 		labels[kv[0]] = kv[1]
 	}
 
-	*p = append(*p, &PodIdentifier{Namespace: namespace, Labels: labels})
+	*p = append(*p, &PodSelector{Namespace: namespace, Labels: labels})
 
 	return nil
 }
 
 // IsCumulative always return true because it's allowed to call Set multiple
 // times.
-func (p PodIdentifiers) IsCumulative() bool {
+func (p PodSelectors) IsCumulative() bool {
 	return true
 }

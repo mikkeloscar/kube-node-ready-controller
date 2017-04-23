@@ -25,12 +25,12 @@ const (
 // resources.
 type NodeController struct {
 	kubernetes.Interface
-	resources []*PodIdentifier
+	resources []*PodSelector
 	interval  time.Duration
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(resources []*PodIdentifier, interval time.Duration) (*NodeController, error) {
+func NewNodeController(resources []*PodSelector, interval time.Duration) (*NodeController, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", "")
 	if err != nil {
 		return nil, err
@@ -103,7 +103,7 @@ func (n *NodeController) nodeReady(node *v1.Node) (bool, error) {
 		return false, err
 	}
 
-	readyResources := make([]*PodIdentifier, 0, len(n.resources))
+	readyResources := make([]*PodSelector, 0, len(n.resources))
 	for _, identifier := range n.resources {
 		for _, pod := range pods.Items {
 			if pod.ObjectMeta.Namespace == identifier.Namespace &&

@@ -31,11 +31,11 @@ spec:
         image: mikkeloscar/kube-node-ready-controller:latest
         args:
         # format <namespace>:<labelKey>=<labelValue>,+
-        - "--pod-identifier=kube-system:application=skipper-ingress"
-        - "--pod-identifier=kube-system:application=kube2iam"
-        - "--pod-identifier=kube-system:application=kube-proxy"
-        - "--pod-identifier=kube-system:application=logging-agent"
-        - "--pod-identifier=kube-system:application=prometheus-node-exporter"
+        - "--pod-selector=kube-system:application=skipper-ingress"
+        - "--pod-selector=kube-system:application=kube2iam"
+        - "--pod-selector=kube-system:application=kube-proxy"
+        - "--pod-selector=kube-system:application=logging-agent"
+        - "--pod-selector=kube-system:application=prometheus-node-exporter"
         resources:
           limits:
             cpu: 200m
