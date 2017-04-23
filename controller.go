@@ -13,6 +13,11 @@ import (
 )
 
 const (
+	// TaintNodeNotReadyWorkload defines a taint key indicating that a node
+	// is not ready to receive workloads.
+	// This taint should be set on all nodes at startup and be removed by
+	// the kube-node-ready-controller once the required system pods are
+	// running on the node.
 	TaintNodeNotReadyWorkload = "node.alpha.kubernetes.io/notReady-workload"
 )
 
@@ -43,7 +48,8 @@ func NewNodeController(resources []*PodIdentifier, interval time.Duration) (*Nod
 	}, nil
 }
 
-// Run ...
+// Run runs the controller loop until it receives a stop signal over the stop
+// channel.
 func (n *NodeController) Run(stopChan <-chan struct{}) {
 	for {
 		nodes, err := n.CoreV1().Nodes().List(metav1.ListOptions{})
