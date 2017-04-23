@@ -1,5 +1,6 @@
 # Kube Node Ready Controller
 [![Build Status](https://travis-ci.org/mikkeloscar/kube-node-ready-controller.svg?branch=master)](https://travis-ci.org/mikkeloscar/kube-node-ready-controller)
+[![Coverage Status](https://coveralls.io/repos/github/mikkeloscar/kube-node-ready-controller/badge.svg)](https://coveralls.io/github/mikkeloscar/kube-node-ready-controller)
 
 It is common to run a number of system pods (usually as DaemonSets) on each
 node in a Kubernetes cluster in order to provide basic functionality. For
