@@ -1,4 +1,5 @@
 # Kube Node Ready Controller
+[![Build Status](https://travis-ci.org/mikkeloscar/kube-node-ready-controller.svg?branch=master)](https://travis-ci.org/mikkeloscar/kube-node-ready-controller)
 
 Simple controller to add/remove `node.alpha.kubernetes.io/notReady-workload`
 taint from node when it is considered ready or not ready based on expected
