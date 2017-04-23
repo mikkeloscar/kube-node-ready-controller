@@ -65,7 +65,7 @@ on the `kubelet`.
 You can also add the taint manually with `kubectl` to test it:
 
 ```bash
-$ kubectl taint nodes <nodename> "node.alpha.kubernetes.io/notReady=:NoSchedule"
+$ kubectl taint nodes <nodename> "node.alpha.kubernetes.io/notReady-workload=:NoSchedule"
 ```
 
 ## TODO
