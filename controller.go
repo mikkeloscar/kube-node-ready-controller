@@ -148,15 +148,6 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 			}).Info("")
 		}
 	} else { // else add the taint if the node is not ready
-		hasTaint := func(node *v1.Node) bool {
-			for _, taint := range node.Spec.Taints {
-				if taint.Key == TaintNodeNotReadyWorkload {
-					return true
-				}
-			}
-			return false
-		}
-
 		if !hasTaint(node) {
 			taint := v1.Taint{
 				Key:    TaintNodeNotReadyWorkload,
@@ -176,6 +167,16 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 	}
 
 	return nil
+}
+
+// hasTaint returns true if the node has the taint TaintNodeNotReadyWorkload.
+func hasTaint(node *v1.Node) bool {
+	for _, taint := range node.Spec.Taints {
+		if taint.Key == TaintNodeNotReadyWorkload {
+			return true
+		}
+	}
+	return false
 }
 
 // containLabels reports whether expectedLabels are in labels.
