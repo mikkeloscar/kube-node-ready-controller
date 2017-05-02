@@ -3,6 +3,8 @@ package main
 import (
 	"fmt"
 	"strings"
+
+	yaml "gopkg.in/yaml.v2"
 )
 
 // PodSelector consist of namespace and labels that can identify a Pod.
@@ -55,4 +57,23 @@ func (p *PodSelectors) Set(value string) error {
 // times.
 func (p PodSelectors) IsCumulative() bool {
 	return true
+}
+
+type selectors struct {
+	Selectors []*PodSelector `yaml:"selectors"`
+}
+
+// ReadSelectors reads selectors defined as a yaml in the following format:
+//
+// selectors:
+// - namespace: kube-system
+//   labels:
+//     foo: bar
+func ReadSelectors(data string) ([]*PodSelector, error) {
+	var s selectors
+	err := yaml.Unmarshal([]byte(data), &s)
+	if err != nil {
+		return nil, err
+	}
+	return s.Selectors, nil
 }

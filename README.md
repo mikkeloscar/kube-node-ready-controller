@@ -71,7 +71,14 @@ $ kubectl taint nodes <nodename> "node.alpha.kubernetes.io/notReady-workload=:No
 
 ## TODO
 
-* [ ] Make it possible to configure pod selectors via a config map.
+* [x] Make it possible to configure pod selectors via a config map.
+
+```yaml
+selectors:
+- namespace: kube-system
+  labels:
+    foo: bar
+```
 * [ ] Instead of long polling the node list, add a Watch feature.
 
 

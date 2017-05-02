@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -19,18 +20,21 @@ const (
 	// the kube-node-ready-controller once the required system pods are
 	// running on the node.
 	TaintNodeNotReadyWorkload = "node.alpha.kubernetes.io/notReady-workload"
+	ConfigMapSelectorsKey     = "pod_selectors"
 )
 
 // NodeController updates the readiness taint of nodes based on expected
-// resources.
+// resources defined by selectors.
 type NodeController struct {
 	kubernetes.Interface
-	resources []*PodSelector
+	selectors []*PodSelector
 	interval  time.Duration
+	configMap string
+	*sync.RWMutex
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(resources []*PodSelector, interval time.Duration) (*NodeController, error) {
+func NewNodeController(selectors []*PodSelector, interval time.Duration, configMap string) (*NodeController, error) {
 	config, err := clientcmd.BuildConfigFromFlags("", "")
 	if err != nil {
 		return nil, err
@@ -43,14 +47,21 @@ func NewNodeController(resources []*PodSelector, interval time.Duration) (*NodeC
 
 	return &NodeController{
 		Interface: client,
-		resources: resources,
+		selectors: selectors,
 		interval:  interval,
+		configMap: configMap,
+		RWMutex:   &sync.RWMutex{},
 	}, nil
 }
 
 // Run runs the controller loop until it receives a stop signal over the stop
 // channel.
 func (n *NodeController) Run(stopChan <-chan struct{}) {
+	// update selectors based on config map.
+	if n.configMap != "" {
+		go n.pollConfig(stopChan)
+	}
+
 	for {
 		nodes, err := n.CoreV1().Nodes().List(metav1.ListOptions{})
 		if err != nil {
@@ -69,7 +80,7 @@ func (n *NodeController) Run(stopChan <-chan struct{}) {
 		select {
 		case <-time.After(n.interval):
 		case <-stopChan:
-			log.Info("terminating main controller loop")
+			log.Info("Terminating main controller loop.")
 			return
 		}
 	}
@@ -94,6 +105,9 @@ func (n *NodeController) handleNode(node *v1.Node) error {
 // nodeReady checks if the required pods are scheduled on the node and has
 // status ready.
 func (n *NodeController) nodeReady(node *v1.Node) (bool, error) {
+	n.RLock()
+	defer n.RUnlock()
+
 	opts := metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.ObjectMeta.Name),
 	}
@@ -103,8 +117,8 @@ func (n *NodeController) nodeReady(node *v1.Node) (bool, error) {
 		return false, err
 	}
 
-	readyResources := make([]*PodSelector, 0, len(n.resources))
-	for _, identifier := range n.resources {
+	readyResources := make([]*PodSelector, 0, len(n.selectors))
+	for _, identifier := range n.selectors {
 		for _, pod := range pods.Items {
 			if pod.ObjectMeta.Namespace == identifier.Namespace &&
 				containLabels(pod.ObjectMeta.Labels, identifier.Labels) {
@@ -116,7 +130,7 @@ func (n *NodeController) nodeReady(node *v1.Node) (bool, error) {
 		}
 	}
 
-	if len(readyResources) != len(n.resources) {
+	if len(readyResources) != len(n.selectors) {
 		return false, nil
 	}
 
@@ -166,6 +180,48 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 		}
 	}
 
+	return nil
+}
+
+// pollConfig polls selector config from a config map at an interval.
+// This is meant to run in a goroutine separate from the main controller loop.
+func (n *NodeController) pollConfig(stopChan <-chan struct{}) {
+	for {
+		err := n.getConfig()
+		if err != nil {
+			log.Error("Failed to get config map: %s", err)
+		}
+
+		select {
+		case <-time.After(n.interval):
+		case <-stopChan:
+			log.Info("Terminating pollConfig loop.")
+			return
+		}
+	}
+}
+
+// getConfig gets a selector config from a config map.
+func (n *NodeController) getConfig() error {
+	configMap, err := n.CoreV1().ConfigMaps("kube-system").Get(n.configMap, metav1.GetOptions{})
+	if err != nil {
+		return err
+	}
+
+	data, ok := configMap.Data[ConfigMapSelectorsKey]
+	if !ok {
+		return fmt.Errorf("Expected key '%s' not present in config map.", ConfigMapSelectorsKey)
+	}
+
+	selectors, err := ReadSelectors(data)
+	if err != nil {
+		return err
+	}
+
+	n.Lock()
+	defer n.Unlock()
+
+	n.selectors = selectors
 	return nil
 }
 

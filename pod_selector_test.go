@@ -59,3 +59,34 @@ func TestPodSelectorIsCumulative(t *testing.T) {
 		t.Error("expected IsCumulative = true")
 	}
 }
+
+func TestReadSelectors(t *testing.T) {
+	const data = `selectors:
+- namespace: kube-system
+  labels:
+    foo: bar`
+
+	selectors, err := ReadSelectors(data)
+	if err != nil {
+		t.Error("should not fail: %s", err)
+	}
+
+	if len(selectors) != 1 {
+		t.Errorf("expected %s selectors, got %s", 1, len(selectors))
+	}
+
+	if selectors[0].Namespace != "kube-system" {
+		t.Errorf("expected namespace '%s', got '%s'", "kube-system", selectors[0].Namespace)
+	}
+
+	if len(selectors[0].Labels) != 1 {
+		t.Errorf("expected %s selectors, got %s", 1, len(selectors[0].Labels))
+	}
+
+	const invalidData = `selectors:
+	`
+	_, err = ReadSelectors(invalidData)
+	if err == nil {
+		t.Errorf("expected error")
+	}
+}

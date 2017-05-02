@@ -19,6 +19,7 @@ var (
 	config struct {
 		Interval     time.Duration
 		PodSelectors PodSelectors
+		ConfigMap    string
 	}
 )
 
@@ -27,12 +28,14 @@ func init() {
 		Default(defaultInterval).DurationVar(&config.Interval)
 	kingpin.Flag("pod-selector", "Pod selector specified by <namespace>:<key>=<value>,+.").
 		SetValue(&config.PodSelectors)
+	kingpin.Flag("pod-selector-configmap", "Name of configMap with pod selector definition. Must be in the same namespace.").
+		StringVar(&config.ConfigMap)
 }
 
 func main() {
 	kingpin.Parse()
 
-	controller, err := NewNodeController(config.PodSelectors, config.Interval)
+	controller, err := NewNodeController(config.PodSelectors, config.Interval, config.ConfigMap)
 	if err != nil {
 		log.Fatal(err)
 	}

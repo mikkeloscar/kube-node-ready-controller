@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -64,7 +65,8 @@ func TestNodeReady(t *testing.T) {
 		t.Run(tc.msg, func(t *testing.T) {
 			controller := &NodeController{
 				Interface: setupMockKubernetes(t, nil),
-				resources: tc.selectors,
+				selectors: tc.selectors,
+				RWMutex:   &sync.RWMutex{},
 			}
 			ready, _ := controller.nodeReady(&v1.Node{})
 
