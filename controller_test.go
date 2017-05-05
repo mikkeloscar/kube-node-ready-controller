@@ -41,6 +41,98 @@ func setupMockKubernetes(t *testing.T, node *v1.Node, config *v1.ConfigMap) kube
 	return client
 }
 
+func TestRunOnce(t *testing.T) {
+	for _, tc := range []struct {
+		msg     string
+		node    *v1.Node
+		config  *v1.ConfigMap
+		success bool
+	}{
+		{
+			msg: "runOnce should succeed.",
+			node: &v1.Node{
+				ObjectMeta: metav1.ObjectMeta{
+					Name: "foo",
+				},
+				Spec: v1.NodeSpec{
+					Taints: []v1.Taint{
+						{
+							Key: TaintNodeNotReadyWorkload,
+						},
+						{
+							Key: "foo",
+						},
+					},
+				},
+			},
+			config: &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "config",
+					Namespace: "kube-system",
+				},
+				Data: map[string]string{ConfigMapSelectorsKey: `selectors:
+- namespace: kube-system
+  labels:
+    foo: bar`},
+			},
+			success: true,
+		},
+	} {
+		t.Run(tc.msg, func(t *testing.T) {
+			controller := &NodeController{
+				Interface: setupMockKubernetes(t, tc.node, tc.config),
+				configMap: "",
+			}
+			if tc.config != nil {
+				controller.configMap = tc.config.Name
+			}
+
+			err := controller.runOnce()
+			if err != nil && tc.success {
+				t.Errorf("should not fail: %s", err)
+			}
+		})
+	}
+}
+
+func TestRun(t *testing.T) {
+	stopCh := make(chan struct{}, 1)
+	node := &v1.Node{
+		ObjectMeta: metav1.ObjectMeta{
+			Name: "foo",
+		},
+		Spec: v1.NodeSpec{
+			Taints: []v1.Taint{
+				{
+					Key: TaintNodeNotReadyWorkload,
+				},
+				{
+					Key: "foo",
+				},
+			},
+		},
+	}
+
+	config := &v1.ConfigMap{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "config",
+			Namespace: "kube-system",
+		},
+		Data: map[string]string{ConfigMapSelectorsKey: `selectors:
+- namespace: kube-system
+labels:
+foo: bar`},
+	}
+
+	controller := &NodeController{
+		Interface: setupMockKubernetes(t, node, config),
+		configMap: config.Name,
+	}
+
+	go controller.Run(stopCh)
+	stopCh <- struct{}{}
+}
+
 func TestNodeReady(t *testing.T) {
 	for _, tc := range []struct {
 		msg       string
