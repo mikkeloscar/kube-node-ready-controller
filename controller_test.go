@@ -9,6 +9,8 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 )
 
+const namespace = "default"
+
 func setupMockKubernetes(t *testing.T, node *v1.Node, config *v1.ConfigMap) kubernetes.Interface {
 	client := fake.NewSimpleClientset()
 
@@ -20,7 +22,7 @@ func setupMockKubernetes(t *testing.T, node *v1.Node, config *v1.ConfigMap) kube
 	}
 
 	if config != nil {
-		_, err := client.CoreV1().ConfigMaps("kube-system").Create(config)
+		_, err := client.CoreV1().ConfigMaps(namespace).Create(config)
 		if err != nil {
 			t.Error(err)
 		}
@@ -68,7 +70,7 @@ func TestRunOnce(t *testing.T) {
 			config: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "config",
-					Namespace: "kube-system",
+					Namespace: namespace,
 				},
 				Data: map[string]string{ConfigMapSelectorsKey: `selectors:
 - namespace: kube-system
@@ -82,6 +84,7 @@ func TestRunOnce(t *testing.T) {
 			controller := &NodeController{
 				Interface: setupMockKubernetes(t, tc.node, tc.config),
 				configMap: "",
+				namespace: namespace,
 			}
 			if tc.config != nil {
 				controller.configMap = tc.config.Name
@@ -116,7 +119,7 @@ func TestRun(t *testing.T) {
 	config := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "config",
-			Namespace: "kube-system",
+			Namespace: namespace,
 		},
 		Data: map[string]string{ConfigMapSelectorsKey: `selectors:
 - namespace: kube-system
@@ -127,6 +130,7 @@ foo: bar`},
 	controller := &NodeController{
 		Interface: setupMockKubernetes(t, node, config),
 		configMap: config.Name,
+		namespace: namespace,
 	}
 
 	go controller.Run(stopCh)
@@ -249,7 +253,7 @@ func TestGetConfig(t *testing.T) {
 			config: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "config",
-					Namespace: "kube-system",
+					Namespace: namespace,
 				},
 				Data: map[string]string{ConfigMapSelectorsKey: `selectors:
 - namespace: kube-system
@@ -263,7 +267,7 @@ func TestGetConfig(t *testing.T) {
 			config: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "config",
-					Namespace: "kube-system",
+					Namespace: namespace,
 				},
 				Data: map[string]string{"invalid": `selectors:
 - namespace: kube-system
@@ -277,7 +281,7 @@ func TestGetConfig(t *testing.T) {
 			config: &v1.ConfigMap{
 				ObjectMeta: metav1.ObjectMeta{
 					Name:      "config",
-					Namespace: "kube-system",
+					Namespace: namespace,
 				},
 				Data: map[string]string{ConfigMapSelectorsKey: `selectors`},
 			},
@@ -293,6 +297,7 @@ func TestGetConfig(t *testing.T) {
 			controller := &NodeController{
 				Interface: setupMockKubernetes(t, nil, tc.config),
 				configMap: "config",
+				namespace: namespace,
 			}
 
 			err := controller.getConfig()

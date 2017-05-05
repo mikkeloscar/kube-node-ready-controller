@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -9,7 +11,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/pkg/api/v1"
-	"k8s.io/client-go/tools/clientcmd"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -20,6 +22,7 @@ const (
 	// running on the node.
 	TaintNodeNotReadyWorkload = "node.alpha.kubernetes.io/notReady-workload"
 	ConfigMapSelectorsKey     = "pod_selectors"
+	serviceAccountNamespace   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
 // NodeController updates the readiness taint of nodes based on expected
@@ -29,11 +32,12 @@ type NodeController struct {
 	selectors []*PodSelector
 	interval  time.Duration
 	configMap string
+	namespace string
 }
 
 // NewNodeController initializes a new NodeController.
 func NewNodeController(selectors []*PodSelector, interval time.Duration, configMap string) (*NodeController, error) {
-	config, err := clientcmd.BuildConfigFromFlags("", "")
+	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -43,12 +47,26 @@ func NewNodeController(selectors []*PodSelector, interval time.Duration, configM
 		return nil, err
 	}
 
-	return &NodeController{
+	controller := &NodeController{
 		Interface: client,
 		selectors: selectors,
 		interval:  interval,
 		configMap: configMap,
-	}, nil
+	}
+
+	if controller.configMap != "" {
+		// get Current Namespace
+		data, err := ioutil.ReadFile(serviceAccountNamespace)
+		if err != nil {
+			return nil, err
+		}
+
+		if ns := strings.TrimSpace(string(data)); len(ns) > 0 {
+			controller.namespace = ns
+		}
+	}
+
+	return controller, nil
 }
 
 func (n *NodeController) runOnce() error {
@@ -190,7 +208,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 
 // getConfig gets a selector config from a config map.
 func (n *NodeController) getConfig() error {
-	configMap, err := n.CoreV1().ConfigMaps("kube-system").Get(n.configMap, metav1.GetOptions{})
+	configMap, err := n.CoreV1().ConfigMaps(n.namespace).Get(n.configMap, metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
