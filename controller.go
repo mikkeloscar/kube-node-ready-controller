@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"sync"
 	"time"
 
 	log "github.com/Sirupsen/logrus"
@@ -30,7 +29,6 @@ type NodeController struct {
 	selectors []*PodSelector
 	interval  time.Duration
 	configMap string
-	*sync.RWMutex
 }
 
 // NewNodeController initializes a new NodeController.
@@ -50,33 +48,43 @@ func NewNodeController(selectors []*PodSelector, interval time.Duration, configM
 		selectors: selectors,
 		interval:  interval,
 		configMap: configMap,
-		RWMutex:   &sync.RWMutex{},
 	}, nil
+}
+
+func (n *NodeController) runOnce() error {
+	// update selectors based on config map.
+	if n.configMap != "" {
+		err := n.getConfig()
+		if err != nil {
+			return err
+		}
+	}
+
+	nodes, err := n.CoreV1().Nodes().List(metav1.ListOptions{})
+	if err != nil {
+		return err
+	}
+
+	for _, node := range nodes.Items {
+		err = n.handleNode(&node)
+		if err != nil {
+			log.Error(err)
+			continue
+		}
+	}
+
+	return nil
 }
 
 // Run runs the controller loop until it receives a stop signal over the stop
 // channel.
 func (n *NodeController) Run(stopChan <-chan struct{}) {
-	// update selectors based on config map.
-	if n.configMap != "" {
-		go n.pollConfig(stopChan)
-	}
-
 	for {
-		nodes, err := n.CoreV1().Nodes().List(metav1.ListOptions{})
+		err := n.runOnce()
 		if err != nil {
 			log.Error(err)
-			goto next
 		}
 
-		for _, node := range nodes.Items {
-			err = n.handleNode(&node)
-			if err != nil {
-				log.Error(err)
-				continue
-			}
-		}
-	next:
 		select {
 		case <-time.After(n.interval):
 		case <-stopChan:
@@ -105,9 +113,6 @@ func (n *NodeController) handleNode(node *v1.Node) error {
 // nodeReady checks if the required pods are scheduled on the node and has
 // status ready.
 func (n *NodeController) nodeReady(node *v1.Node) (bool, error) {
-	n.RLock()
-	defer n.RUnlock()
-
 	opts := metav1.ListOptions{
 		FieldSelector: fmt.Sprintf("spec.nodeName=%s", node.ObjectMeta.Name),
 	}
@@ -183,24 +188,6 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 	return nil
 }
 
-// pollConfig polls selector config from a config map at an interval.
-// This is meant to run in a goroutine separate from the main controller loop.
-func (n *NodeController) pollConfig(stopChan <-chan struct{}) {
-	for {
-		err := n.getConfig()
-		if err != nil {
-			log.Error("Failed to get config map: %s", err)
-		}
-
-		select {
-		case <-time.After(n.interval):
-		case <-stopChan:
-			log.Info("Terminating pollConfig loop.")
-			return
-		}
-	}
-}
-
 // getConfig gets a selector config from a config map.
 func (n *NodeController) getConfig() error {
 	configMap, err := n.CoreV1().ConfigMaps("kube-system").Get(n.configMap, metav1.GetOptions{})
@@ -210,16 +197,13 @@ func (n *NodeController) getConfig() error {
 
 	data, ok := configMap.Data[ConfigMapSelectorsKey]
 	if !ok {
-		return fmt.Errorf("Expected key '%s' not present in config map.", ConfigMapSelectorsKey)
+		return fmt.Errorf("expected key '%s' not present in config map.", ConfigMapSelectorsKey)
 	}
 
 	selectors, err := ReadSelectors(data)
 	if err != nil {
 		return err
 	}
-
-	n.Lock()
-	defer n.Unlock()
 
 	n.selectors = selectors
 	return nil

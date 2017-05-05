@@ -34,8 +34,21 @@ The `kube-node-ready-controller` can be run as a deployment in the cluster. See
 
 To deploy it to your cluster modify the `--pod-selector` args to match your
 system pods. The format for the selector is
-`<namespace>:<labelKey>=<labelValue>,<labelKey2>=<labelValue2>`. Once
-configured, deploy it by running:
+`<namespace>:<labelKey>=<labelValue>,<labelKey2>=<labelValue2>`. Alternatively
+you can set the flag `--pod-selector-configmap` and use a configMap to
+configure the selectors ([full example](/Docs/configmap.yaml)):
+
+```yaml
+selectors:
+- namespace: kube-system
+  labels:
+    foo: bar
+```
+
+With this approach you can change the selectors at runtime, just by updating
+the config map.
+
+Once configured, deploy it by running:
 
 ```bash
 $ kubectl apply -f Docs/deployment.yaml
@@ -73,12 +86,6 @@ $ kubectl taint nodes <nodename> "node.alpha.kubernetes.io/notReady-workload=:No
 
 * [x] Make it possible to configure pod selectors via a config map.
 
-```yaml
-selectors:
-- namespace: kube-system
-  labels:
-    foo: bar
-```
 * [ ] Instead of long polling the node list, add a Watch feature.
 
 

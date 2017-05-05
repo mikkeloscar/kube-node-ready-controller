@@ -50,6 +50,6 @@ func handleSigterm(stopChan chan struct{}) {
 	signals := make(chan os.Signal, 1)
 	signal.Notify(signals, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	<-signals
-	log.Infoln("received Term signal. Terminating...")
+	log.Info("Received Term signal. Terminating...")
 	close(stopChan)
 }

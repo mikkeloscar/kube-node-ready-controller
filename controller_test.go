@@ -1,7 +1,6 @@
 package main
 
 import (
-	"sync"
 	"testing"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -10,11 +9,18 @@ import (
 	"k8s.io/client-go/pkg/api/v1"
 )
 
-func setupMockKubernetes(t *testing.T, node *v1.Node) kubernetes.Interface {
+func setupMockKubernetes(t *testing.T, node *v1.Node, config *v1.ConfigMap) kubernetes.Interface {
 	client := fake.NewSimpleClientset()
 
 	if node != nil {
 		_, err := client.CoreV1().Nodes().Create(node)
+		if err != nil {
+			t.Error(err)
+		}
+	}
+
+	if config != nil {
+		_, err := client.CoreV1().ConfigMaps("kube-system").Create(config)
 		if err != nil {
 			t.Error(err)
 		}
@@ -64,9 +70,8 @@ func TestNodeReady(t *testing.T) {
 	} {
 		t.Run(tc.msg, func(t *testing.T) {
 			controller := &NodeController{
-				Interface: setupMockKubernetes(t, nil),
+				Interface: setupMockKubernetes(t, nil, nil),
 				selectors: tc.selectors,
-				RWMutex:   &sync.RWMutex{},
 			}
 			ready, _ := controller.nodeReady(&v1.Node{})
 
@@ -121,7 +126,7 @@ func TestSetNodeReady(t *testing.T) {
 	} {
 		t.Run(tc.msg, func(t *testing.T) {
 			controller := &NodeController{
-				Interface: setupMockKubernetes(t, tc.node),
+				Interface: setupMockKubernetes(t, tc.node, nil),
 			}
 			_ = controller.setNodeReady(tc.node, tc.ready)
 
@@ -137,6 +142,88 @@ func TestSetNodeReady(t *testing.T) {
 			if !tc.ready && !hasTaint(n) {
 				t.Errorf("node should have taint when not ready")
 			}
+		})
+	}
+}
+
+func TestGetConfig(t *testing.T) {
+	for _, tc := range []struct {
+		msg     string
+		config  *v1.ConfigMap
+		success bool
+	}{
+		{
+			msg: "valid config map should overwrite selectors",
+			config: &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "config",
+					Namespace: "kube-system",
+				},
+				Data: map[string]string{ConfigMapSelectorsKey: `selectors:
+- namespace: kube-system
+  labels:
+    foo: bar`},
+			},
+			success: true,
+		},
+		{
+			msg: "config map with invalid key should fail",
+			config: &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "config",
+					Namespace: "kube-system",
+				},
+				Data: map[string]string{"invalid": `selectors:
+- namespace: kube-system
+  labels:
+    foo: bar`},
+			},
+			success: false,
+		},
+		{
+			msg: "config map with invalid content should fail",
+			config: &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      "config",
+					Namespace: "kube-system",
+				},
+				Data: map[string]string{ConfigMapSelectorsKey: `selectors`},
+			},
+			success: false,
+		},
+		{
+			msg:     "no configMap exists should fail",
+			config:  nil,
+			success: false,
+		},
+	} {
+		t.Run(tc.msg, func(t *testing.T) {
+			controller := &NodeController{
+				Interface: setupMockKubernetes(t, nil, tc.config),
+				configMap: "config",
+			}
+
+			err := controller.getConfig()
+			if err != nil && tc.success {
+				t.Errorf("should not fail: %s", err)
+			}
+
+			if err == nil && !tc.success {
+				t.Error("expected failure")
+			}
+
+			// n, err := controller.CoreV1().Nodes().Get(tc.node.Name, metav1.GetOptions{})
+			// if err != nil {
+			// 	t.Errorf("should not fail: %s", err)
+			// }
+
+			// if tc.ready && hasTaint(n) {
+			// 	t.Errorf("node should not have taint when ready")
+			// }
+
+			// if !tc.ready && !hasTaint(n) {
+			// 	t.Errorf("node should have taint when not ready")
+			// }
 		})
 	}
 }

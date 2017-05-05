@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: node-ready-selectors
+  namespace: kube-system
+data:
+  pod_selectors:
+    selectors:
+    - namespace: kube-system
+      labels:
+        foo: bar
