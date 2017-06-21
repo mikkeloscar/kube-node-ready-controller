@@ -68,11 +68,11 @@ func TestReadSelectors(t *testing.T) {
 
 	selectors, err := ReadSelectors(data)
 	if err != nil {
-		t.Error("should not fail: %s", err)
+		t.Errorf("should not fail: %s", err)
 	}
 
 	if len(selectors) != 1 {
-		t.Errorf("expected %s selectors, got %s", 1, len(selectors))
+		t.Errorf("expected %d selectors, got %d", 1, len(selectors))
 	}
 
 	if selectors[0].Namespace != "kube-system" {
@@ -80,7 +80,7 @@ func TestReadSelectors(t *testing.T) {
 	}
 
 	if len(selectors[0].Labels) != 1 {
-		t.Errorf("expected %s selectors, got %s", 1, len(selectors[0].Labels))
+		t.Errorf("expected %d selectors, got %d", 1, len(selectors[0].Labels))
 	}
 
 	const invalidData = `selectors:

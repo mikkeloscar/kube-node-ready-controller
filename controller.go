@@ -21,8 +21,10 @@ const (
 	// the kube-node-ready-controller once the required system pods are
 	// running on the node.
 	TaintNodeNotReadyWorkload = "node.alpha.kubernetes.io/notReady-workload"
-	ConfigMapSelectorsKey     = "pod_selectors"
-	serviceAccountNamespace   = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	// ConfigMapSelectorsKey defines the key name of the config map where
+	// the pod selector definition is defined.
+	ConfigMapSelectorsKey   = "pod_selectors"
+	serviceAccountNamespace = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
 )
 
 // NodeController updates the readiness taint of nodes based on expected
@@ -215,7 +217,7 @@ func (n *NodeController) getConfig() error {
 
 	data, ok := configMap.Data[ConfigMapSelectorsKey]
 	if !ok {
-		return fmt.Errorf("expected key '%s' not present in config map.", ConfigMapSelectorsKey)
+		return fmt.Errorf("expected key '%s' not present in config map", ConfigMapSelectorsKey)
 	}
 
 	selectors, err := ReadSelectors(data)
