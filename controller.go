@@ -6,11 +6,11 @@ import (
 	"strings"
 	"time"
 
-	log "github.com/Sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -31,14 +31,15 @@ const (
 // resources defined by selectors.
 type NodeController struct {
 	kubernetes.Interface
-	selectors []*PodSelector
-	interval  time.Duration
-	configMap string
-	namespace string
+	selectors      []*PodSelector
+	interval       time.Duration
+	configMap      string
+	namespace      string
+	nodeReadyHooks []Hook
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(selectors []*PodSelector, interval time.Duration, configMap string) (*NodeController, error) {
+func NewNodeController(selectors []*PodSelector, interval time.Duration, configMap string, hooks []Hook) (*NodeController, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -50,10 +51,11 @@ func NewNodeController(selectors []*PodSelector, interval time.Duration, configM
 	}
 
 	controller := &NodeController{
-		Interface: client,
-		selectors: selectors,
-		interval:  interval,
-		configMap: configMap,
+		Interface:      client,
+		selectors:      selectors,
+		interval:       interval,
+		configMap:      configMap,
+		nodeReadyHooks: hooks,
 	}
 
 	if controller.configMap != "" {
@@ -202,6 +204,14 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				"taint":  TaintNodeNotReadyWorkload,
 				"node":   node.ObjectMeta.Name,
 			}).Info("")
+
+			// trigger hooks on node ready.
+			for _, hook := range n.nodeReadyHooks {
+				err := hook.Trigger(node.Spec.ProviderID)
+				if err != nil {
+					log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
+				}
+			}
 		}
 	}
 

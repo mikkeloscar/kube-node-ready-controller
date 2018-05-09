@@ -1,4 +1,4 @@
-apiVersion: extensions/v1beta1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: kube-node-ready-controller
@@ -17,12 +17,8 @@ spec:
       labels:
         application: kube-node-ready-controller
         version: latest
-      annotations:
-        scheduler.alpha.kubernetes.io/critical-pod: ''
     spec:
       tolerations:
-      - key: CriticalAddonsOnly
-        operator: Exists
       - key: node.alpha.kubernetes.io/notReady-workload
         operator: Exists
         effect: NoSchedule
@@ -38,8 +34,8 @@ spec:
         - "--pod-selector=kube-system:application=prometheus-node-exporter"
         resources:
           limits:
-            cpu: 200m
-            memory: 200Mi
+            cpu: 20m
+            memory: 50Mi
           requests:
-            cpu: 10m
-            memory: 25Mi
+            cpu: 20m
+            memory: 50Mi

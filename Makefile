@@ -4,12 +4,9 @@ BINARY        ?= kube-node-ready-controller
 VERSION       ?= $(shell git describe --tags --always --dirty)
 IMAGE         ?= mikkeloscar/$(BINARY)
 TAG           ?= $(VERSION)
-GITHEAD       = $(shell git rev-parse HEAD)
-GITURL        = $(shell git config --get remote.origin.url)
-GITSTATUS     = $(shell git status --porcelain || echo "no changes")
 SOURCES       = $(shell find . -name '*.go')
 DOCKERFILE    ?= Dockerfile
-GOPKGS        = $(shell go list ./... | grep -v /vendor/)
+GOPKGS        = $(shell go list ./...)
 BUILD_FLAGS   ?= -v
 LDFLAGS       ?= -X main.version=$(VERSION) -w -s
 
@@ -38,11 +35,8 @@ build/linux/$(BINARY): $(SOURCES)
 build/osx/$(BINARY): $(SOURCES)
 	GOOS=darwin GOARCH=amd64 CGO_ENABLED=0 go build $(BUILD_FLAGS) -o build/osx/$(BINARY) -ldflags "$(LDFLAGS)" .
 
-build.docker: scm-source.json build.linux
+build.docker: build.linux
 	docker build --rm -t "$(IMAGE):$(TAG)" -f $(DOCKERFILE) .
 
 build.push: build.docker
 	docker push "$(IMAGE):$(TAG)"
-
-scm-source.json: .git
-	@echo '{"url": "git:$(GITURL)", "revision": "$(GITHEAD)", "author": "$(USER)", "status": "$(GITSTATUS)"}' > scm-source.json
