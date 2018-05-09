@@ -82,6 +82,20 @@ You can also add the taint manually with `kubectl` to test it:
 $ kubectl taint nodes <nodename> "node.alpha.kubernetes.io/notReady-workload=:NoSchedule"
 ```
 
+## Hooks
+
+As an extra feature `kube-node-ready-controller` has optional support for
+triggering hooks when a node is marked as ready.
+
+### AWS Autoscaling Lifecycle Hook
+
+Trigger AWS Autoscaling Group lifecycle hook when node becomes ready. This can
+be used to signal the Autoscaling Group that the node is in service.
+
+Enable the hook with the flag `--asg-lifecycle-hook=<hook-name>`. This assumes
+you have a hook with the defined name on the Autoscaling groups of all the
+nodes managed by the controller.
+
 ## TODO
 
 * [x] Make it possible to configure pod selectors via a config map.
