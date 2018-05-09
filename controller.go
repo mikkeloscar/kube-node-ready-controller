@@ -31,15 +31,16 @@ const (
 // resources defined by selectors.
 type NodeController struct {
 	kubernetes.Interface
-	selectors      []*PodSelector
-	interval       time.Duration
-	configMap      string
-	namespace      string
-	nodeReadyHooks []Hook
+	selectors        []*PodSelector
+	ignoreNodeLabels map[string]string
+	interval         time.Duration
+	configMap        string
+	namespace        string
+	nodeReadyHooks   []Hook
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(selectors []*PodSelector, interval time.Duration, configMap string, hooks []Hook) (*NodeController, error) {
+func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]string, interval time.Duration, configMap string, hooks []Hook) (*NodeController, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -51,11 +52,12 @@ func NewNodeController(selectors []*PodSelector, interval time.Duration, configM
 	}
 
 	controller := &NodeController{
-		Interface:      client,
-		selectors:      selectors,
-		interval:       interval,
-		configMap:      configMap,
-		nodeReadyHooks: hooks,
+		Interface:        client,
+		selectors:        selectors,
+		ignoreNodeLabels: ignoreNodeLabels,
+		interval:         interval,
+		configMap:        configMap,
+		nodeReadyHooks:   hooks,
 	}
 
 	if controller.configMap != "" {
@@ -119,6 +121,14 @@ func (n *NodeController) Run(stopChan <-chan struct{}) {
 // handleNode checks if a node is ready and updates the notReady taint
 // accordingly.
 func (n *NodeController) handleNode(node *v1.Node) error {
+	if containLabels(node.Labels, n.ignoreNodeLabels) {
+		log.WithFields(log.Fields{
+			"node":   node.Name,
+			"labels": n.ignoreNodeLabels,
+		}).Info("Ignoring node because of ignore labels.")
+		return nil
+	}
+
 	ready, err := n.nodeReady(node)
 	if err != nil {
 		return err
@@ -151,6 +161,13 @@ func (n *NodeController) nodeReady(node *v1.Node) (bool, error) {
 				containLabels(pod.ObjectMeta.Labels, identifier.Labels) {
 				if podReady(&pod) {
 					readyResources = append(readyResources, identifier)
+				} else {
+					// TODO: find all not ready pods
+					log.WithFields(log.Fields{
+						"pod":       pod.Name,
+						"namespace": pod.Namespace,
+						"node":      node.Name,
+					}).Warn("Pod not ready.")
 				}
 				break
 			}

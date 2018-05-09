@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -22,6 +24,7 @@ var (
 		PodSelectors     PodSelectors
 		ConfigMap        string
 		ASGLifecycleHook string
+		IgnoreNodeLabels []string
 	}
 )
 
@@ -32,6 +35,8 @@ func init() {
 		SetValue(&config.PodSelectors)
 	kingpin.Flag("pod-selector-configmap", "Name of configMap with pod selector definition. Must be in the same namespace.").
 		StringVar(&config.ConfigMap)
+	kingpin.Flag("ignore-node-label", "Ignore nodes based on label. Format <key>=<value>.").
+		StringsVar(&config.IgnoreNodeLabels)
 	kingpin.Flag("asg-lifecycle-hook", "Name of ASG lifecycle hook to trigger on node Ready.").
 		StringVar(&config.ASGLifecycleHook)
 }
@@ -49,7 +54,12 @@ func main() {
 		hooks = append(hooks, NewASGLifecycleHook(awsSess, config.ASGLifecycleHook))
 	}
 
-	controller, err := NewNodeController(config.PodSelectors, config.Interval, config.ConfigMap, hooks)
+	ignoreLabels, err := parseNodeLabels(config.IgnoreNodeLabels)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	controller, err := NewNodeController(config.PodSelectors, ignoreLabels, config.Interval, config.ConfigMap, hooks)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -66,4 +76,16 @@ func handleSigterm(stopChan chan struct{}) {
 	<-signals
 	log.Info("Received Term signal. Terminating...")
 	close(stopChan)
+}
+
+func parseNodeLabels(ignoreNodeLabels []string) (map[string]string, error) {
+	labels := make(map[string]string, len(ignoreNodeLabels))
+	for _, label := range ignoreNodeLabels {
+		split := strings.Split(label, "=")
+		if len(split) != 2 {
+			return nil, fmt.Errorf("failed to parse label defintion '%s'", label)
+		}
+		labels[split[0]] = split[1]
+	}
+	return labels, nil
 }
