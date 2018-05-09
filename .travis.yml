@@ -1,15 +1,15 @@
 language: go
 
 go:
-  - 1.8.1
+  - 1.x
 
 before_install:
+  - curl https://raw.githubusercontent.com/golang/dep/master/install.sh | sh
   - go get github.com/mattn/goveralls
-  - go get github.com/Masterminds/glide
 
 install:
-  - glide install --strip-vendor
+  - dep ensure -vendor-only
 
 script:
+  - make build.docker
   - goveralls -service=travis-ci
-  - make

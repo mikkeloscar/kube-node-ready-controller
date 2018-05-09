@@ -8,9 +8,9 @@ import (
 
 	log "github.com/sirupsen/logrus"
 
+	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/pkg/api/v1"
 	"k8s.io/client-go/rest"
 )
 
@@ -207,7 +207,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 
 			// trigger hooks on node ready.
 			for _, hook := range n.nodeReadyHooks {
-				err := hook.Trigger(node.Spec.ExternalID)
+				err := hook.Trigger(node.Spec.ProviderID)
 				if err != nil {
 					log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
 				}

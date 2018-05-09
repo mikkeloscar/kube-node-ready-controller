@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	"github.com/aws/aws-sdk-go/service/autoscaling"
+	"github.com/aws/aws-sdk-go/service/autoscaling/autoscalingiface"
 )
 
 const (
@@ -16,28 +18,21 @@ const (
 // instance id.
 type Hook interface {
 	Name() string
-	Trigger(instance string) error
-}
-
-// autoscalingAPI defines the subset of the AWS Autoscaling API used to
-// implement the hook. It helps mocking AWS calls in tests.
-type autoscalingAPI interface {
-	DescribeAutoScalingInstances(input *autoscaling.DescribeAutoScalingInstancesInput) (*autoscaling.DescribeAutoScalingInstancesOutput, error)
-	CompleteLifecycleAction(input *autoscaling.CompleteLifecycleActionInput) (*autoscaling.CompleteLifecycleActionOutput, error)
+	Trigger(providerID string) error
 }
 
 // ASGLifecycleHook defines an ASG lifecycle hook to be triggered on node
 // Ready.
 type ASGLifecycleHook struct {
 	hookName string
-	svc      autoscalingAPI
+	svc      autoscalingiface.AutoScalingAPI
 }
 
 // NewASGLifecycleHook creates a new asg lifecycle hook.
-func NewASGLifecycleHook(hookName string) *ASGLifecycleHook {
+func NewASGLifecycleHook(sess *session.Session, hookName string) *ASGLifecycleHook {
 	return &ASGLifecycleHook{
 		hookName: hookName,
-		svc:      autoscaling.New(session.New()),
+		svc:      autoscaling.New(sess),
 	}
 }
 
@@ -47,11 +42,16 @@ func (a *ASGLifecycleHook) Name() string {
 }
 
 // Trigger triggers a the ASG lifecycle hook for a given instance.
-func (a *ASGLifecycleHook) Trigger(instance string) error {
+func (a *ASGLifecycleHook) Trigger(providerID string) error {
+	instanceID, err := instanceIDFromProviderID(providerID)
+	if err != nil {
+		return err
+	}
+
 	// get ASG from instance-id
 	instances := &autoscaling.DescribeAutoScalingInstancesInput{
 		InstanceIds: []*string{
-			aws.String(instance),
+			aws.String(instanceID),
 		},
 	}
 
@@ -66,11 +66,23 @@ func (a *ASGLifecycleHook) Trigger(instance string) error {
 
 	input := &autoscaling.CompleteLifecycleActionInput{
 		AutoScalingGroupName:  result.AutoScalingInstances[0].AutoScalingGroupName,
-		InstanceId:            aws.String(instance),
+		InstanceId:            aws.String(instanceID),
 		LifecycleActionResult: aws.String(lifecycleActionContinue),
 		LifecycleHookName:     aws.String(a.hookName),
 	}
 
 	_, err = a.svc.CompleteLifecycleAction(input)
 	return err
+}
+
+// instanceIDFromProviderID extracts the EC2 instanceID from a Kubernetes
+// ProviderID.
+func instanceIDFromProviderID(providerID string) (string, error) {
+	full := strings.TrimPrefix(providerID, "aws:///")
+	split := strings.Split(full, "/")
+	if len(split) != 2 {
+		return "", fmt.Errorf("unexpected providerID format: %s", providerID)
+	}
+
+	return split[1], nil
 }

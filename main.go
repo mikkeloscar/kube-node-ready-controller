@@ -8,6 +8,7 @@ import (
 
 	"gopkg.in/alecthomas/kingpin.v2"
 
+	"github.com/aws/aws-sdk-go/aws/session"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -40,7 +41,12 @@ func main() {
 
 	var hooks []Hook
 	if config.ASGLifecycleHook != "" {
-		hooks = append(hooks, NewASGLifecycleHook(config.ASGLifecycleHook))
+		awsSess, err := session.NewSession()
+		if err != nil {
+			log.Fatalf("Failed to setup Kubernetes client: %v", err)
+		}
+
+		hooks = append(hooks, NewASGLifecycleHook(awsSess, config.ASGLifecycleHook))
 	}
 
 	controller, err := NewNodeController(config.PodSelectors, config.Interval, config.ConfigMap, hooks)
