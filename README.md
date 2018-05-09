@@ -30,13 +30,13 @@ node.
 ## Setup
 
 The `kube-node-ready-controller` can be run as a deployment in the cluster. See
-[deployment.yaml](/Docs/deployment.yaml).
+[deployment.yaml](/docs/deployment.yaml).
 
 To deploy it to your cluster modify the `--pod-selector` args to match your
 system pods. The format for the selector is
 `<namespace>:<labelKey>=<labelValue>,<labelKey2>=<labelValue2>`. Alternatively
 you can set the flag `--pod-selector-configmap` and use a configMap to
-configure the selectors ([full example](/Docs/configmap.yaml)):
+configure the selectors ([full example](/docs/configmap.yaml)):
 
 ```yaml
 selectors:
@@ -51,7 +51,7 @@ the config map.
 Once configured, deploy it by running:
 
 ```bash
-$ kubectl apply -f Docs/deployment.yaml
+$ kubectl apply -f docs/deployment.yaml
 ```
 
 Note that we set the following toleration on the pod:
