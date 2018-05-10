@@ -31,16 +31,17 @@ const (
 // resources defined by selectors.
 type NodeController struct {
 	kubernetes.Interface
-	selectors        []*PodSelector
-	ignoreNodeLabels map[string]string
-	interval         time.Duration
-	configMap        string
-	namespace        string
-	nodeReadyHooks   []Hook
+	selectors            []*PodSelector
+	ignoreNodeLabels     map[string]string
+	interval             time.Duration
+	configMap            string
+	namespace            string
+	nodeReadyHooks       []Hook
+	nodeStartUpObeserver NodeStartUpObeserver
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]string, interval time.Duration, configMap string, hooks []Hook) (*NodeController, error) {
+func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -52,12 +53,13 @@ func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]str
 	}
 
 	controller := &NodeController{
-		Interface:        client,
-		selectors:        selectors,
-		ignoreNodeLabels: ignoreNodeLabels,
-		interval:         interval,
-		configMap:        configMap,
-		nodeReadyHooks:   hooks,
+		Interface:            client,
+		selectors:            selectors,
+		ignoreNodeLabels:     ignoreNodeLabels,
+		interval:             interval,
+		configMap:            configMap,
+		nodeReadyHooks:       hooks,
+		nodeStartUpObeserver: nodeStartUpObeserver,
 	}
 
 	if controller.configMap != "" {
@@ -204,6 +206,17 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				"taint":  TaintNodeNotReadyWorkload,
 				"node":   node.ObjectMeta.Name,
 			}).Info("")
+
+			// observe node startup duration
+			n.nodeStartUpObeserver.ObeserveNode(*node)
+
+			// trigger hooks on node ready.
+			for _, hook := range n.nodeReadyHooks {
+				err := hook.Trigger(node.Spec.ProviderID)
+				if err != nil {
+					log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
+				}
+			}
 		}
 	} else { // else add the taint if the node is not ready
 		if !hasTaint(node) {
@@ -221,14 +234,6 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				"taint":  TaintNodeNotReadyWorkload,
 				"node":   node.ObjectMeta.Name,
 			}).Info("")
-
-			// trigger hooks on node ready.
-			for _, hook := range n.nodeReadyHooks {
-				err := hook.Trigger(node.Spec.ProviderID)
-				if err != nil {
-					log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
-				}
-			}
 		}
 	}
 
