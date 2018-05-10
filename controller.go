@@ -207,8 +207,10 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				"node":   node.ObjectMeta.Name,
 			}).Info("")
 
-			// observe node startup duration
-			n.nodeStartUpObeserver.ObeserveNode(*node)
+			if n.nodeStartUpObeserver != nil {
+				// observe node startup duration
+				n.nodeStartUpObeserver.ObeserveNode(*node)
+			}
 
 			// trigger hooks on node ready.
 			for _, hook := range n.nodeReadyHooks {
