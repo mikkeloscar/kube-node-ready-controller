@@ -15,12 +15,6 @@ import (
 )
 
 const (
-	// TaintNodeNotReadyWorkload defines a taint key indicating that a node
-	// is not ready to receive workloads.
-	// This taint should be set on all nodes at startup and be removed by
-	// the kube-node-ready-controller once the required system pods are
-	// running on the node.
-	TaintNodeNotReadyWorkload = "node.alpha.kubernetes.io/notReady-workload"
 	// ConfigMapSelectorsKey defines the key name of the config map where
 	// the pod selector definition is defined.
 	ConfigMapSelectorsKey   = "pod_selectors"
@@ -31,17 +25,18 @@ const (
 // resources defined by selectors.
 type NodeController struct {
 	kubernetes.Interface
-	selectors            []*PodSelector
-	ignoreNodeLabels     map[string]string
-	interval             time.Duration
-	configMap            string
-	namespace            string
-	nodeReadyHooks       []Hook
-	nodeStartUpObeserver NodeStartUpObeserver
+	selectors             []*PodSelector
+	ignoreNodeLabels      map[string]string
+	interval              time.Duration
+	configMap             string
+	namespace             string
+	nodeReadyHooks        []Hook
+	nodeStartUpObeserver  NodeStartUpObeserver
+	taintNodeNotReadyName string
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
+func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -53,13 +48,14 @@ func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]str
 	}
 
 	controller := &NodeController{
-		Interface:            client,
-		selectors:            selectors,
-		ignoreNodeLabels:     ignoreNodeLabels,
-		interval:             interval,
-		configMap:            configMap,
-		nodeReadyHooks:       hooks,
-		nodeStartUpObeserver: nodeStartUpObeserver,
+		Interface:             client,
+		selectors:             selectors,
+		ignoreNodeLabels:      ignoreNodeLabels,
+		interval:              interval,
+		configMap:             configMap,
+		nodeReadyHooks:        hooks,
+		nodeStartUpObeserver:  nodeStartUpObeserver,
+		taintNodeNotReadyName: taintNodeNotReadyName,
 	}
 
 	if controller.configMap != "" {
@@ -190,7 +186,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 	if ready {
 		var newTaints []v1.Taint
 		for _, taint := range node.Spec.Taints {
-			if taint.Key != TaintNodeNotReadyWorkload {
+			if taint.Key != n.taintNodeNotReadyName {
 				newTaints = append(newTaints, taint)
 			}
 		}
@@ -203,7 +199,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 			}
 			log.WithFields(log.Fields{
 				"action": "removed",
-				"taint":  TaintNodeNotReadyWorkload,
+				"taint":  n.taintNodeNotReadyName,
 				"node":   node.ObjectMeta.Name,
 			}).Info("")
 
@@ -221,9 +217,9 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 			}
 		}
 	} else { // else add the taint if the node is not ready
-		if !hasTaint(node) {
+		if !hasTaint(node, n.taintNodeNotReadyName) {
 			taint := v1.Taint{
-				Key:    TaintNodeNotReadyWorkload,
+				Key:    n.taintNodeNotReadyName,
 				Effect: v1.TaintEffectNoSchedule,
 			}
 			node.Spec.Taints = append(node.Spec.Taints, taint)
@@ -233,7 +229,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 			}
 			log.WithFields(log.Fields{
 				"action": "added",
-				"taint":  TaintNodeNotReadyWorkload,
+				"taint":  n.taintNodeNotReadyName,
 				"node":   node.ObjectMeta.Name,
 			}).Info("")
 		}
@@ -263,10 +259,10 @@ func (n *NodeController) getConfig() error {
 	return nil
 }
 
-// hasTaint returns true if the node has the taint TaintNodeNotReadyWorkload.
-func hasTaint(node *v1.Node) bool {
+// hasTaint returns true if the node has the taint.
+func hasTaint(node *v1.Node, taintName string) bool {
 	for _, taint := range node.Spec.Taints {
-		if taint.Key == TaintNodeNotReadyWorkload {
+		if taint.Key == taintName {
 			return true
 		}
 	}

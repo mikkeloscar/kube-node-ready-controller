@@ -19,8 +19,9 @@ import (
 )
 
 const (
-	defaultInterval       = "15s"
-	defaultMetricsAddress = ":7979"
+	defaultInterval              = "15s"
+	defaultMetricsAddress        = ":7979"
+	defaultTaintNodeNotReadyName = "node.alpha.kubernetes.io/notReady-workload"
 )
 
 var (
@@ -32,6 +33,7 @@ var (
 		ASGLifecycleHook         string
 		IgnoreNodeLabels         []string
 		EnableNodeStartUpMetrics bool
+		TaintNodeNotReadyName    string
 	}
 )
 
@@ -50,6 +52,8 @@ func init() {
 		StringVar(&config.ASGLifecycleHook)
 	kingpin.Flag("enable-node-startup-metrics", "Enable node startup duration metrics.").
 		BoolVar(&config.EnableNodeStartUpMetrics)
+	kingpin.Flag("not-ready-taint-name", "Name of the taint set for not ready nodes.").
+		StringVar(&config.TaintNodeNotReadyName)
 }
 
 func main() {
@@ -85,6 +89,7 @@ func main() {
 	controller, err := NewNodeController(
 		config.PodSelectors,
 		ignoreLabels,
+		config.TaintNodeNotReadyName,
 		config.Interval,
 		config.ConfigMap,
 		hooks,

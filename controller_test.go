@@ -9,7 +9,10 @@ import (
 	"k8s.io/client-go/kubernetes/fake"
 )
 
-const namespace = "default"
+const (
+	namespace             = "default"
+	taintNodeNotReadyName = "notReady"
+)
 
 func setupMockKubernetes(t *testing.T, node *v1.Node, config *v1.ConfigMap) kubernetes.Interface {
 	client := fake.NewSimpleClientset()
@@ -59,7 +62,7 @@ func TestRunOnce(t *testing.T) {
 				Spec: v1.NodeSpec{
 					Taints: []v1.Taint{
 						{
-							Key: TaintNodeNotReadyWorkload,
+							Key: taintNodeNotReadyName,
 						},
 						{
 							Key: "foo",
@@ -107,7 +110,7 @@ func TestRun(t *testing.T) {
 		Spec: v1.NodeSpec{
 			Taints: []v1.Taint{
 				{
-					Key: TaintNodeNotReadyWorkload,
+					Key: taintNodeNotReadyName,
 				},
 				{
 					Key: "foo",
@@ -193,7 +196,7 @@ func TestSetNodeReady(t *testing.T) {
 				Spec: v1.NodeSpec{
 					Taints: []v1.Taint{
 						{
-							Key: TaintNodeNotReadyWorkload,
+							Key: taintNodeNotReadyName,
 						},
 						{
 							Key: "foo",
@@ -222,7 +225,8 @@ func TestSetNodeReady(t *testing.T) {
 	} {
 		t.Run(tc.msg, func(t *testing.T) {
 			controller := &NodeController{
-				Interface: setupMockKubernetes(t, tc.node, nil),
+				Interface:             setupMockKubernetes(t, tc.node, nil),
+				taintNodeNotReadyName: taintNodeNotReadyName,
 			}
 			_ = controller.setNodeReady(tc.node, tc.ready)
 
@@ -231,11 +235,11 @@ func TestSetNodeReady(t *testing.T) {
 				t.Errorf("should not fail: %s", err)
 			}
 
-			if tc.ready && hasTaint(n) {
+			if tc.ready && hasTaint(n, taintNodeNotReadyName) {
 				t.Errorf("node should not have taint when ready")
 			}
 
-			if !tc.ready && !hasTaint(n) {
+			if !tc.ready && !hasTaint(n, taintNodeNotReadyName) {
 				t.Errorf("node should have taint when not ready")
 			}
 		})
