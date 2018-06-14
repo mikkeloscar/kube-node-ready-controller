@@ -12,7 +12,6 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
-	"k8s.io/client-go/rest"
 )
 
 const (
@@ -37,17 +36,7 @@ type NodeController struct {
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(selectors []*PodSelector, nodeSelectorLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
-	config, err := rest.InClusterConfig()
-	if err != nil {
-		return nil, err
-	}
-
-	client, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, err
-	}
-
+func NewNodeController(client kubernetes.Interface, selectors []*PodSelector, nodeSelectorLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
 	controller := &NodeController{
 		Interface:             client,
 		selectors:             selectors,
@@ -91,6 +80,8 @@ func (n *NodeController) runOnce() error {
 	if err != nil {
 		return err
 	}
+
+	log.Infof("Checking %d nodes for readiness", len(nodes.Items))
 
 	for _, node := range nodes.Items {
 		err = n.handleNode(&node)

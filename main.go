@@ -2,18 +2,20 @@ package main
 
 import (
 	"net/http"
+	"net/url"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
-
-	"gopkg.in/alecthomas/kingpin.v2"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/session"
 	pkgAWS "github.com/mikkeloscar/kube-node-ready-controller/pkg/aws"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	log "github.com/sirupsen/logrus"
+	"gopkg.in/alecthomas/kingpin.v2"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -32,12 +34,14 @@ var (
 		ASGLifecycleHook         string
 		EnableNodeStartUpMetrics bool
 		TaintNodeNotReadyName    string
+		APIServer                *url.URL
 	}
 )
 
 func init() {
 	kingpin.Flag("interval", "Interval between checks.").
 		Default(defaultInterval).DurationVar(&config.Interval)
+	kingpin.Flag("apiserver", "API server url.").URLVar(&config.APIServer)
 	kingpin.Flag("metrics-address", "defines where to serve metrics").
 		Default(defaultMetricsAddress).StringVar(&config.MetricsAddress)
 	kingpin.Flag("pod-selector", "Pod selector specified by <namespace>:<key>=<value>,+.").
@@ -79,7 +83,25 @@ func main() {
 		}
 	}
 
+	var kubeConfig *rest.Config
+	if config.APIServer != nil {
+		kubeConfig = &rest.Config{
+			Host: config.APIServer.String(),
+		}
+	} else {
+		kubeConfig, err = rest.InClusterConfig()
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+
+	client, err := kubernetes.NewForConfig(kubeConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	controller, err := NewNodeController(
+		client,
 		config.PodSelectors,
 		config.NodeSelectors,
 		config.TaintNodeNotReadyName,
