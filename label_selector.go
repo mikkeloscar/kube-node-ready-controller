@@ -19,6 +19,10 @@ func (l Labels) String() string {
 
 // Set parses a pod selector string and adds it to the list.
 func (l Labels) Set(value string) error {
+	if l == nil {
+		l = Labels(map[string]string{})
+	}
+
 	labelsStrs := strings.Split(value, ",")
 	for _, labelStr := range labelsStrs {
 		kv := strings.Split(labelStr, "=")

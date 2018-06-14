@@ -32,7 +32,7 @@ func TestSetLabelsValue(t *testing.T) {
 		},
 	} {
 		t.Run(tc.msg, func(t *testing.T) {
-			labels := Labels(map[string]string{})
+			var labels Labels
 			err := labels.Set(tc.value)
 			if err != nil && tc.valid {
 				t.Errorf("should not fail: %s", err)
@@ -46,7 +46,7 @@ func TestSetLabelsValue(t *testing.T) {
 }
 
 func TestLabelsIsCumulative(t *testing.T) {
-	labels := Labels(map[string]string{})
+	var labels Labels
 	if !labels.IsCumulative() {
 		t.Error("expected IsCumulative = true")
 	}
