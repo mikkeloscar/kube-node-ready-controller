@@ -10,6 +10,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -26,7 +27,7 @@ const (
 type NodeController struct {
 	kubernetes.Interface
 	selectors             []*PodSelector
-	ignoreNodeLabels      map[string]string
+	nodeSelectorLabels    labels.Set
 	interval              time.Duration
 	configMap             string
 	namespace             string
@@ -36,7 +37,7 @@ type NodeController struct {
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
+func NewNodeController(selectors []*PodSelector, nodeSelectorLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
 	config, err := rest.InClusterConfig()
 	if err != nil {
 		return nil, err
@@ -50,7 +51,7 @@ func NewNodeController(selectors []*PodSelector, ignoreNodeLabels map[string]str
 	controller := &NodeController{
 		Interface:             client,
 		selectors:             selectors,
-		ignoreNodeLabels:      ignoreNodeLabels,
+		nodeSelectorLabels:    labels.Set(nodeSelectorLabels),
 		interval:              interval,
 		configMap:             configMap,
 		nodeReadyHooks:        hooks,
@@ -82,7 +83,11 @@ func (n *NodeController) runOnce() error {
 		}
 	}
 
-	nodes, err := n.CoreV1().Nodes().List(metav1.ListOptions{})
+	opts := metav1.ListOptions{
+		LabelSelector: n.nodeSelectorLabels.String(),
+	}
+
+	nodes, err := n.CoreV1().Nodes().List(opts)
 	if err != nil {
 		return err
 	}
@@ -119,14 +124,6 @@ func (n *NodeController) Run(stopChan <-chan struct{}) {
 // handleNode checks if a node is ready and updates the notReady taint
 // accordingly.
 func (n *NodeController) handleNode(node *v1.Node) error {
-	if containLabels(node.Labels, n.ignoreNodeLabels) {
-		log.WithFields(log.Fields{
-			"node":   node.Name,
-			"labels": n.ignoreNodeLabels,
-		}).Info("Ignoring node because of ignore labels.")
-		return nil
-	}
-
 	ready, err := n.nodeReady(node)
 	if err != nil {
 		return err
