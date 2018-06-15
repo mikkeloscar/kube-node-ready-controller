@@ -33,12 +33,12 @@ type NodeController struct {
 	configMap             string
 	namespace             string
 	nodeReadyHooks        []Hook
-	nodeStartUpObeserver  NodeStartUpObeserver
+	nodeStartUpObserver   NodeStartUpObserver
 	taintNodeNotReadyName string
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(client kubernetes.Interface, selectors []*PodSelector, nodeSelectorLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
+func NewNodeController(client kubernetes.Interface, selectors []*PodSelector, nodeSelectorLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObserver NodeStartUpObserver) (*NodeController, error) {
 	controller := &NodeController{
 		Interface:             client,
 		selectors:             selectors,
@@ -46,7 +46,7 @@ func NewNodeController(client kubernetes.Interface, selectors []*PodSelector, no
 		interval:              interval,
 		configMap:             configMap,
 		nodeReadyHooks:        hooks,
-		nodeStartUpObeserver:  nodeStartUpObeserver,
+		nodeStartUpObserver:   nodeStartUpObserver,
 		taintNodeNotReadyName: taintNodeNotReadyName,
 	}
 
@@ -219,9 +219,9 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				"node":   updatedNode.ObjectMeta.Name,
 			}).Info("")
 
-			if n.nodeStartUpObeserver != nil {
+			if n.nodeStartUpObserver != nil {
 				// observe node startup duration
-				n.nodeStartUpObeserver.ObeserveNode(*updatedNode)
+				n.nodeStartUpObserver.ObserveNode(*updatedNode)
 			}
 
 			// trigger hooks on node ready.

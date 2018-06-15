@@ -14,17 +14,17 @@ import (
 	"k8s.io/api/core/v1"
 )
 
-// NodeStartUpObeserver describes an observer which can observe the startup
+// NodeStartUpObserver describes an observer which can observe the startup
 // time duration of a node.
-type NodeStartUpObeserver interface {
-	ObeserveNode(node v1.Node)
+type NodeStartUpObserver interface {
+	ObserveNode(node v1.Node)
 }
 
 // ASGNodeStartUpObserver is a node startup duration oberserver which determines
 // the statup time duration based on ec2 instance launch time.
 type ASGNodeStartUpObserver struct {
 	ec2Client              ec2iface.EC2API
-	nodesObeserved         sync.Map
+	nodesObserved         sync.Map
 	startUpDurationSeconds prometheus.Summary
 }
 
@@ -51,14 +51,14 @@ func NewASGNodeStartUpObserver(sess *session.Session) (*ASGNodeStartUpObserver, 
 	}, nil
 }
 
-// ObeserveNode observes the node startup time duration based on the launch
+// ObserveNode observes the node startup time duration based on the launch
 // time of the underlying ec2 instance.
 // The observation is executed in a go routine to not block the caller.
-func (o *ASGNodeStartUpObserver) ObeserveNode(node v1.Node) {
+func (o *ASGNodeStartUpObserver) ObserveNode(node v1.Node) {
 	go func() {
 		now := time.Now().UTC()
 
-		if _, ok := o.nodesObeserved.Load(node.Name); ok {
+		if _, ok := o.nodesObserved.Load(node.Name); ok {
 			log.Infof("Ignoring node %s already observed", node.Name)
 			return
 		}
@@ -72,7 +72,7 @@ func (o *ASGNodeStartUpObserver) ObeserveNode(node v1.Node) {
 		o.startUpDurationSeconds.Observe(now.Sub(launchTime).Seconds())
 
 		// record that node was observed
-		o.nodesObeserved.Store(node.Name, nil)
+		o.nodesObserved.Store(node.Name, nil)
 	}()
 }
 
