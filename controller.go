@@ -187,56 +187,56 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				}
 			}
 
-			if len(newTaints) != len(updatedNode.Spec.Taints) {
-				updatedNode.Spec.Taints = newTaints
-				_, err := n.CoreV1().Nodes().Update(updatedNode)
+			if len(newTaints) == len(updatedNode.Spec.Taints) {
+				return nil
+			}
+			updatedNode.Spec.Taints = newTaints
+		} else {
+			if hasTaint(updatedNode, n.taintNodeNotReadyName) {
+				return nil
+			}
+
+			taint := v1.Taint{
+				Key:    n.taintNodeNotReadyName,
+				Effect: v1.TaintEffectNoSchedule,
+			}
+			updatedNode.Spec.Taints = append(updatedNode.Spec.Taints, taint)
+		}
+
+		_, err = n.CoreV1().Nodes().Update(updatedNode)
+		if err != nil {
+			// automatically retry if there was a conflicting update.
+			if errors.IsConflict(err) {
+				return err
+			}
+			return backoff.Permanent(err)
+		}
+
+		if ready {
+			log.WithFields(log.Fields{
+				"action": "removed",
+				"taint":  n.taintNodeNotReadyName,
+				"node":   updatedNode.ObjectMeta.Name,
+			}).Info("")
+
+			if n.nodeStartUpObeserver != nil {
+				// observe node startup duration
+				n.nodeStartUpObeserver.ObeserveNode(*updatedNode)
+			}
+
+			// trigger hooks on node ready.
+			for _, hook := range n.nodeReadyHooks {
+				err := hook.Trigger(updatedNode.Spec.ProviderID)
 				if err != nil {
-					// automatically retry if there was a conflicting update.
-					if errors.IsConflict(err) {
-						return err
-					}
-					return backoff.Permanent(err)
-				}
-				log.WithFields(log.Fields{
-					"action": "removed",
-					"taint":  n.taintNodeNotReadyName,
-					"node":   updatedNode.ObjectMeta.Name,
-				}).Info("")
-
-				if n.nodeStartUpObeserver != nil {
-					// observe node startup duration
-					n.nodeStartUpObeserver.ObeserveNode(*updatedNode)
-				}
-
-				// trigger hooks on node ready.
-				for _, hook := range n.nodeReadyHooks {
-					err := hook.Trigger(updatedNode.Spec.ProviderID)
-					if err != nil {
-						log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
-					}
+					log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
 				}
 			}
-		} else { // else add the taint if the node is not ready
-			if !hasTaint(updatedNode, n.taintNodeNotReadyName) {
-				taint := v1.Taint{
-					Key:    n.taintNodeNotReadyName,
-					Effect: v1.TaintEffectNoSchedule,
-				}
-				updatedNode.Spec.Taints = append(updatedNode.Spec.Taints, taint)
-				_, err := n.CoreV1().Nodes().Update(updatedNode)
-				if err != nil {
-					// automatically retry if there was a conflicting update.
-					if errors.IsConflict(err) {
-						return err
-					}
-					return backoff.Permanent(err)
-				}
-				log.WithFields(log.Fields{
-					"action": "added",
-					"taint":  n.taintNodeNotReadyName,
-					"node":   updatedNode.ObjectMeta.Name,
-				}).Info("")
-			}
+		} else {
+			log.WithFields(log.Fields{
+				"action": "added",
+				"taint":  n.taintNodeNotReadyName,
+				"node":   updatedNode.ObjectMeta.Name,
+			}).Info("")
 		}
 
 		return nil
