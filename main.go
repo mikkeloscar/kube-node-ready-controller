@@ -97,7 +97,7 @@ func main() {
 	}
 
 	// set timeouts for kube client
-	kubeConfig.Transport = &http.Transport{
+	tr := &http.Transport{
 		Dial: (&net.Dialer{
 			Timeout:   30 * time.Second,
 			KeepAlive: 30 * time.Second,
@@ -107,6 +107,22 @@ func main() {
 		ExpectContinueTimeout: 1 * time.Second,
 	}
 
+	stopChan := make(chan struct{})
+	// We need this to reliably fade on DNS change, which is right
+	// now not fixed with IdleConnTimeout in the http.Transport.
+	// https://github.com/golang/go/issues/23427
+	go func() {
+		for {
+			select {
+			case <-time.After(30 * time.Second):
+				tr.CloseIdleConnections()
+			case <-stopChan:
+				return
+			}
+		}
+	}()
+
+	kubeConfig.Transport = tr
 	client, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		log.Fatal(err)
@@ -126,7 +142,6 @@ func main() {
 		log.Fatal(err)
 	}
 
-	stopChan := make(chan struct{}, 1)
 	go handleSigterm(stopChan)
 
 	go serveMetrics(config.MetricsAddress)
