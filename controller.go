@@ -6,9 +6,10 @@ import (
 	"strings"
 	"time"
 
+	"github.com/cenkalti/backoff"
 	log "github.com/sirupsen/logrus"
-
 	"k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -19,6 +20,7 @@ const (
 	// the pod selector definition is defined.
 	ConfigMapSelectorsKey   = "pod_selectors"
 	serviceAccountNamespace = "/var/run/secrets/kubernetes.io/serviceaccount/namespace"
+	maxConflictRetries      = 50
 )
 
 // NodeController updates the readiness taint of nodes based on expected
@@ -31,12 +33,12 @@ type NodeController struct {
 	configMap             string
 	namespace             string
 	nodeReadyHooks        []Hook
-	nodeStartUpObeserver  NodeStartUpObeserver
+	nodeStartUpObserver   NodeStartUpObserver
 	taintNodeNotReadyName string
 }
 
 // NewNodeController initializes a new NodeController.
-func NewNodeController(client kubernetes.Interface, selectors []*PodSelector, nodeSelectorLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObeserver NodeStartUpObeserver) (*NodeController, error) {
+func NewNodeController(client kubernetes.Interface, selectors []*PodSelector, nodeSelectorLabels map[string]string, taintNodeNotReadyName string, interval time.Duration, configMap string, hooks []Hook, nodeStartUpObserver NodeStartUpObserver) (*NodeController, error) {
 	controller := &NodeController{
 		Interface:             client,
 		selectors:             selectors,
@@ -44,7 +46,7 @@ func NewNodeController(client kubernetes.Interface, selectors []*PodSelector, no
 		interval:              interval,
 		configMap:             configMap,
 		nodeReadyHooks:        hooks,
-		nodeStartUpObeserver:  nodeStartUpObeserver,
+		nodeStartUpObserver:   nodeStartUpObserver,
 		taintNodeNotReadyName: taintNodeNotReadyName,
 	}
 
@@ -170,60 +172,78 @@ func (n *NodeController) nodeReady(node *v1.Node) (bool, error) {
 // setNodeReady sets node taint macthing ready value. E.g. sets NotReady taint
 // if ready is false, and removes the taint (if exists) when ready is true.
 func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
-	// if ready, remove notReady taint if exists on the node
-	if ready {
-		var newTaints []v1.Taint
-		for _, taint := range node.Spec.Taints {
-			if taint.Key != n.taintNodeNotReadyName {
-				newTaints = append(newTaints, taint)
-			}
+	setNodeReadiness := func() error {
+		updatedNode, err := n.CoreV1().Nodes().Get(node.Name, metav1.GetOptions{})
+		if err != nil {
+			return backoff.Permanent(err)
 		}
 
-		if len(newTaints) != len(node.Spec.Taints) {
-			node.Spec.Taints = newTaints
-			_, err := n.CoreV1().Nodes().Update(node)
-			if err != nil {
-				return err
-			}
-			log.WithFields(log.Fields{
-				"action": "removed",
-				"taint":  n.taintNodeNotReadyName,
-				"node":   node.ObjectMeta.Name,
-			}).Info("")
-
-			if n.nodeStartUpObeserver != nil {
-				// observe node startup duration
-				n.nodeStartUpObeserver.ObeserveNode(*node)
-			}
-
-			// trigger hooks on node ready.
-			for _, hook := range n.nodeReadyHooks {
-				err := hook.Trigger(node.Spec.ProviderID)
-				if err != nil {
-					log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
+		// if ready, remove notReady taint if exists on the node
+		if ready {
+			var newTaints []v1.Taint
+			for _, taint := range updatedNode.Spec.Taints {
+				if taint.Key != n.taintNodeNotReadyName {
+					newTaints = append(newTaints, taint)
 				}
 			}
-		}
-	} else { // else add the taint if the node is not ready
-		if !hasTaint(node, n.taintNodeNotReadyName) {
+
+			if len(newTaints) == len(updatedNode.Spec.Taints) {
+				return nil
+			}
+			updatedNode.Spec.Taints = newTaints
+		} else {
+			if hasTaint(updatedNode, n.taintNodeNotReadyName) {
+				return nil
+			}
+
 			taint := v1.Taint{
 				Key:    n.taintNodeNotReadyName,
 				Effect: v1.TaintEffectNoSchedule,
 			}
-			node.Spec.Taints = append(node.Spec.Taints, taint)
-			_, err := n.CoreV1().Nodes().Update(node)
-			if err != nil {
+			updatedNode.Spec.Taints = append(updatedNode.Spec.Taints, taint)
+		}
+
+		_, err = n.CoreV1().Nodes().Update(updatedNode)
+		if err != nil {
+			// automatically retry if there was a conflicting update.
+			if errors.IsConflict(err) {
 				return err
 			}
+			return backoff.Permanent(err)
+		}
+
+		if ready {
+			log.WithFields(log.Fields{
+				"action": "removed",
+				"taint":  n.taintNodeNotReadyName,
+				"node":   updatedNode.ObjectMeta.Name,
+			}).Info("")
+
+			if n.nodeStartUpObserver != nil {
+				// observe node startup duration
+				n.nodeStartUpObserver.ObserveNode(*updatedNode)
+			}
+
+			// trigger hooks on node ready.
+			for _, hook := range n.nodeReadyHooks {
+				err := hook.Trigger(updatedNode.Spec.ProviderID)
+				if err != nil {
+					log.Errorf("Failed to trigger hook '%s': %v", hook.Name(), err)
+				}
+			}
+		} else {
 			log.WithFields(log.Fields{
 				"action": "added",
 				"taint":  n.taintNodeNotReadyName,
-				"node":   node.ObjectMeta.Name,
+				"node":   updatedNode.ObjectMeta.Name,
 			}).Info("")
 		}
+
+		return nil
 	}
 
-	return nil
+	backoffCfg := backoff.WithMaxRetries(backoff.NewConstantBackOff(1*time.Second), maxConflictRetries)
+	return backoff.Retry(setNodeReadiness, backoffCfg)
 }
 
 // getConfig gets a selector config from a config map.

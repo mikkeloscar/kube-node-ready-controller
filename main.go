@@ -76,9 +76,9 @@ func main() {
 		hooks = append(hooks, NewASGLifecycleHook(awsSession, config.ASGLifecycleHook))
 	}
 
-	var startupObeserver NodeStartUpObeserver
+	var startupObserver NodeStartUpObserver
 	if config.EnableNodeStartUpMetrics {
-		startupObeserver, err = NewASGNodeStartUpObserver(awsSession)
+		startupObserver, err = NewASGNodeStartUpObserver(awsSession)
 		if err != nil {
 			log.Fatalf("Failed to setup observer: %v", err)
 		}
@@ -136,7 +136,7 @@ func main() {
 		config.Interval,
 		config.ConfigMap,
 		hooks,
-		startupObeserver,
+		startupObserver,
 	)
 	if err != nil {
 		log.Fatal(err)
