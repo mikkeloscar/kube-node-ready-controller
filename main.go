@@ -1,6 +1,7 @@
 package main
 
 import (
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -93,6 +94,17 @@ func main() {
 		if err != nil {
 			log.Fatal(err)
 		}
+	}
+
+	// set timeouts for kube client
+	kubeConfig.Transport = &http.Transport{
+		Dial: (&net.Dialer{
+			Timeout:   30 * time.Second,
+			KeepAlive: 30 * time.Second,
+		}).Dial,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 10 * time.Second,
+		ExpectContinueTimeout: 1 * time.Second,
 	}
 
 	client, err := kubernetes.NewForConfig(kubeConfig)
