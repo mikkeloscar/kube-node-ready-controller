@@ -9,7 +9,7 @@ import (
 	"github.com/cenkalti/backoff"
 	log "github.com/sirupsen/logrus"
 	"k8s.io/api/core/v1"
-	apiErrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/kubernetes"
@@ -192,8 +192,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				_, err := n.CoreV1().Nodes().Update(updatedNode)
 				if err != nil {
 					// automatically retry if there was a conflicting update.
-					serr, ok := err.(*apiErrors.StatusError)
-					if ok && serr.Status().Reason == metav1.StatusReasonConflict {
+					if errors.IsConflict(err) {
 						return err
 					}
 					return backoff.Permanent(err)
@@ -227,8 +226,7 @@ func (n *NodeController) setNodeReady(node *v1.Node, ready bool) error {
 				_, err := n.CoreV1().Nodes().Update(updatedNode)
 				if err != nil {
 					// automatically retry if there was a conflicting update.
-					serr, ok := err.(*apiErrors.StatusError)
-					if ok && serr.Status().Reason == metav1.StatusReasonConflict {
+					if errors.IsConflict(err) {
 						return err
 					}
 					return backoff.Permanent(err)
