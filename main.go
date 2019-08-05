@@ -84,6 +84,10 @@ func main() {
 		}
 	}
 
+	if len(config.TaintNodeNotReadyName) == 0 {
+		config.TaintNodeNotReadyName = defaultTaintNodeNotReadyName
+	}
+
 	var kubeConfig *rest.Config
 	if config.APIServer != nil {
 		kubeConfig = &rest.Config{
@@ -122,7 +126,6 @@ func main() {
 		}
 	}()
 
-	kubeConfig.Transport = tr
 	client, err := kubernetes.NewForConfig(kubeConfig)
 	if err != nil {
 		log.Fatal(err)
